@@ -17,5 +17,5 @@ cd src
 gcc -o BisectorTree BisectorTree.c
 
 # run compiled code
-.\BisectorTree
+./BisectorTree
 ```
