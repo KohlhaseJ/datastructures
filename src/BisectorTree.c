@@ -4,6 +4,7 @@
 #include <time.h>
 #include <math.h>
 #include <stdbool.h>
+#include <limits.h>
 #include <float.h>
 
 // HEADER
@@ -52,7 +53,8 @@ Point* uptown(Node *v);
 float distance(Point *p, Point *q);
 enum movementDecision decision(float dL, float dR, Node *v);
 void traverse(Node *root);
-void print(Node *root);
+void printStatistics(Node *root);
+void updateStatistics(Node *root, int currentHeight);
 
 
 // IMPLEMENTATION
@@ -225,29 +227,31 @@ enum movementDecision decision(float dL, float dR, Node *v) {
         return UP;
     } 
 }
+int leafCount = 0;
+int minDepth = 0;
+int maxDepth = 0;
+void printStatistics(Node *root) {
+    leafCount = 0;
+    minDepth = INT_MAX;
+    maxDepth = 0;
 
-void print(Node *root) { 
-    if (root->lChild == NULL && root->rChild == NULL) {
-        if(root->pR == NULL) {
-            printf("(%d,%d/NIL)", root->pL->x, root->pL->y);
-        } else {            
-            printf("(%d,%d/%d,%d)", root->pL->x, root->pL->y, root->pR->x, root->pR->y);
-        }
+    updateStatistics(root, 0);
+
+    printf("TREE STATISITCS:\nLeafs: %d\nMin depth: %d\nMax depth: %d\n\n", leafCount, minDepth, maxDepth);
+}
+
+void updateStatistics(Node *root, int currentHeight) {    
+    if (root->full == false) {
+        leafCount += 1;
+        if (minDepth > currentHeight) minDepth = currentHeight;
+        if (maxDepth < currentHeight) maxDepth = currentHeight;
         return;
     }
-
     if (root->lChild != NULL) {
-        print(root->lChild);
-        printf(" - ");
+        updateStatistics(root->lChild, currentHeight + 1);
     }
-    if(root->pR == NULL) {
-        printf("(%d,%d/NIL)", root->pL->x, root->pL->y);
-    } else {            
-        printf("(%d,%d/%d,%d)", root->pL->x, root->pL->y, root->pR->x, root->pR->y);
-    }
-    if (root->rChild != NULL) {
-        printf(" - ");
-        print(root->rChild);
+    if(root->rChild != NULL) {
+        updateStatistics(root->rChild, currentHeight + 1);
     }
 }
 
@@ -260,10 +264,8 @@ int main(int argc, char** argv) {
     const int SIZE = 4096;
     const int LOWER_BOUND = 0;
     const int UPPER_BOUND = 100;
-    const int TIMES = 1000;
     
-    printf("EXPERIMENTAL SETUP:\n%d nodes (values randomly drawn)\nInterval [%d, %d]\n", SIZE, LOWER_BOUND, UPPER_BOUND);
-    printf("Query all possible values from interval.\n\n");
+    printf("EXPERIMENTAL SETUP:\n%d nodes (values randomly drawn)\nInterval [%d, %d]\n\n", SIZE, LOWER_BOUND, UPPER_BOUND);
 
     // init timing stats
     double creationTime = 0;
@@ -296,7 +298,10 @@ int main(int argc, char** argv) {
     end = clock();
     creationTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
 
-    // run queries
+    // run experiments    
+    printf("EXPERIMENTAL RESULTS:\n");
+    printf("Creation time: %f ms\n\n", creationTime);
+    // search inside interval
     for (int x = LOWER_BOUND; x <= UPPER_BOUND; x++) {
         for (int y = LOWER_BOUND; y <= UPPER_BOUND; y++) {
             Point *query = malloc(sizeof(Point));
@@ -316,13 +321,61 @@ int main(int argc, char** argv) {
         }
     }
     avgQueryTime = avgQueryTime / ((UPPER_BOUND-LOWER_BOUND)*(UPPER_BOUND-LOWER_BOUND));
-   
-    free(root);
     
-    printf("EXPERIMENTS FINISHED:\n");
-    printf("Creation time: %f ms\n", creationTime);
-    printf("Average query time: %f ms\n", avgQueryTime);
-    printf("Minimum query time: %f ms\n", minQueryTime);
-    printf("Maximum query time: %f ms\n", maxQueryTime);
+    printf("Inside the interval:\n");
+    printf("   Average query time: %f ms\n", avgQueryTime);
+    printf("   Minimum query time: %f ms\n", minQueryTime);
+    printf("   Maximum query time: %f ms\n\n", maxQueryTime);
+
+    // search outside interval
+    avgQueryTime = 0;
+    minQueryTime = DBL_MAX;
+    maxQueryTime = 0;
+    for (int x = LOWER_BOUND-UPPER_BOUND; x <= LOWER_BOUND; x++) {
+        for (int y = LOWER_BOUND-UPPER_BOUND; y <= LOWER_BOUND; y++) {
+            Point *query = malloc(sizeof(Point));
+            query->x = x;
+            query->y = y;
+            
+            start = clock();
+            
+            Point *found = NULL;
+            found = search(query, root);
+
+            end = clock();
+            float queryTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
+            if (queryTime < minQueryTime) minQueryTime = queryTime;
+            if (queryTime > maxQueryTime) maxQueryTime = queryTime;
+            avgQueryTime += queryTime;
+        }
+    }
+    for (int x = UPPER_BOUND; x <= UPPER_BOUND + UPPER_BOUND - LOWER_BOUND; x++) {
+        for (int y = UPPER_BOUND; y <= UPPER_BOUND + UPPER_BOUND - LOWER_BOUND; y++) {
+            Point *query = malloc(sizeof(Point));
+            query->x = x;
+            query->y = y;
+            
+            start = clock();
+            
+            Point *found = NULL;
+            found = search(query, root);
+
+            end = clock();
+            float queryTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
+            if (queryTime < minQueryTime) minQueryTime = queryTime;
+            if (queryTime > maxQueryTime) maxQueryTime = queryTime;
+            avgQueryTime += queryTime;
+        }
+    }
+    avgQueryTime = avgQueryTime / ((UPPER_BOUND-LOWER_BOUND)*(UPPER_BOUND-LOWER_BOUND)*2);
+    
+    printf("Outside the interval:\n");
+    printf("   Average query time: %f ms\n", avgQueryTime);
+    printf("   Minimum query time: %f ms\n", minQueryTime);
+    printf("   Maximum query time: %f ms\n\n", maxQueryTime);
+
+    printStatistics(root);
+
+    free(root);
     return (EXIT_SUCCESS);
 }
