@@ -44,21 +44,29 @@ bool VERBOSE = false;
 float NDIST = 0.0f;
 Point *z = NULL;
 Point *q = NULL;
+int insertionSteps;
+int querySteps;
+int nodeCount = 0;
+int leafCount = 0;
+int height = 0;
 
 // functions
 Node* insert(Point *p, Node *v, Node *w);
 Point* search(Point *z, Node *v);
+Point* naiveSearch(Point *query, Point *a[], int n);
 Point* downtown(Node *v);
 Point* uptown(Node *v);
 float distance(Point *p, Point *q);
 enum movementDecision decision(float dL, float dR, Node *v);
 void traverse(Node *root);
-void printStatistics(Node *root);
 void updateStatistics(Node *root, int currentHeight);
 
 
 // IMPLEMENTATION
-Node* insert(Point *p, Node *v, Node *w) {
+Node* insert(Point *p, Node *v, Node *w) {  
+    // increase step counter  
+    insertionSteps++;
+
     if (v == NULL) {
         // create new node
         v = malloc(sizeof (Node));
@@ -93,6 +101,7 @@ Node* insert(Point *p, Node *v, Node *w) {
         }
     }
 
+
     return v;    
 }
 
@@ -105,7 +114,26 @@ Point* search(Point *query, Node *v) {
     return downtown(v);
 }
 
+Point* naiveSearch(Point *query, Point *a[], int n) {
+    // init global search parameters
+    z = query;
+    q = NULL;
+    NDIST = DBL_MAX;
+    // search closest
+    for(int i = 0; i < n; i++){
+        float dist = distance(a[i], z);
+        if(dist < NDIST) {
+            NDIST = dist;
+            q = a[i];
+        }
+    }
+    return q;
+}
+
 Point* downtown(Node *v) {
+    // increase step counter
+    querySteps++;
+
     if(v->ancestor == NULL) {
         float dL = distance(v->pL, z);
         float dR = distance(v->pR, z);
@@ -171,6 +199,8 @@ Point* downtown(Node *v) {
 }
 
 Point* uptown(Node *v) {
+    // increase step counter
+    querySteps++;
     if (v == NULL) {
         return q;
     }
@@ -227,24 +257,12 @@ enum movementDecision decision(float dL, float dR, Node *v) {
         return UP;
     } 
 }
-int leafCount = 0;
-int minDepth = 0;
-int maxDepth = 0;
-void printStatistics(Node *root) {
-    leafCount = 0;
-    minDepth = INT_MAX;
-    maxDepth = 0;
 
-    updateStatistics(root, 0);
-
-    printf("TREE STATISITCS:\nLeafs: %d\nMin depth: %d\nMax depth: %d\n\n", leafCount, minDepth, maxDepth);
-}
-
-void updateStatistics(Node *root, int currentHeight) {    
+void updateStatistics(Node *root, int currentHeight) {
+    nodeCount++;
     if (root->full == false) {
-        leafCount += 1;
-        if (minDepth > currentHeight) minDepth = currentHeight;
-        if (maxDepth < currentHeight) maxDepth = currentHeight;
+        leafCount++;
+        if (height < currentHeight) height = currentHeight;
         return;
     }
     if (root->lChild != NULL) {
@@ -261,121 +279,165 @@ int randomIntegerIn(int lower, int upper) {
 
 int main(int argc, char** argv) {
     // experimental setup
-    const int SIZE = 4096;
+    const int SIZE = 512;
     const int LOWER_BOUND = 0;
     const int UPPER_BOUND = 100;
-    
-    printf("EXPERIMENTAL SETUP:\n%d nodes (values randomly drawn)\nInterval [%d, %d]\n\n", SIZE, LOWER_BOUND, UPPER_BOUND);
+    const int TIMES = 10;
+
+    // init step counters
+    int avgInsertionSteps = 0;
+    int minInsertionSteps = INT_MAX;
+    int maxInsertionSteps = 0;
+    int avgQuerySteps = 0;
+    int minQuerySteps = INT_MAX;
+    int maxQuerySteps = 0;
+
+    // init tree statistics
+    int avgNodeCount = 0;
+    int minNodeCount = INT_MAX;
+    int maxNodeCount = 0;
+    int avgLeafCount = 0;
+    int minLeafCount = INT_MAX;
+    int maxLeafCount = 0;
+    int avgHeight = 0;
+    int minHeight = INT_MAX;
+    int maxHeight = 0;
 
     // init timing stats
-    double creationTime = 0;
-    double avgQueryTime = 0;
-    double minQueryTime = DBL_MAX;
-    double maxQueryTime = 0;
+    double naiveAvgCreationTime = 0;
+    double naiveMinCreationTime = DBL_MAX;
+    double naiveMaxCreationTime = 0;
+    double naiveAvgQueryTime = 0;
+    double naiveMinQueryTime = DBL_MAX;
+    double naiveMaxQueryTime = 0;
+    double bisectorAvgCreationTime = 0;
+    double bisectorMinCreationTime = DBL_MAX;
+    double bisectorMaxCreationTime = 0;
+    double bisectorAvgQueryTime = 0;
+    double bisectorMinQueryTime = DBL_MAX;
+    double bisectorMaxQueryTime = 0;    
+    
+    printf("EXPERIMENTAL SETUP:\n");
+    printf("---------------------\n");
+    printf("%d points (values randomly drawn)\n", SIZE);
+    printf("Interval [%d, %d]\n", LOWER_BOUND, UPPER_BOUND);
+    printf("Tested for %d trees\n\n", TIMES);
 
     // run experiments
-    // build tree
-    Node *root = NULL;
-    Point *a[(sizeof (Point)*SIZE)];
     clock_t start, end;
+    // construction of TIMES trees
+    for(int i = 0; i < TIMES; i++) {
+        Node *root = NULL;
+        Point *a[(sizeof (Point)*SIZE)];
+        // draw randoms
+        start = clock();
+        for (int i = 0; i < SIZE; i++) {
+            Point *p = malloc(sizeof(Point));
+            p->x = randomIntegerIn(LOWER_BOUND, UPPER_BOUND);
+            p->y = randomIntegerIn(LOWER_BOUND, UPPER_BOUND);
+            a[i] = p;
+        }
+        end = clock();
+        double creationTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
+        if(creationTime < naiveMinCreationTime) naiveMinCreationTime = creationTime;
+        if(creationTime > naiveMaxCreationTime) naiveMaxCreationTime = creationTime;
+        naiveAvgCreationTime += creationTime;
+        
+        // fill tree
+        insertionSteps = 0;
+        start = clock();
 
-    // draw randoms
-    for (int i = 0; i < SIZE; i++) {
-        Point *p = malloc(sizeof(Point));
-        p->x = randomIntegerIn(LOWER_BOUND, UPPER_BOUND);
-        p->y = randomIntegerIn(LOWER_BOUND, UPPER_BOUND);
-        a[i] = p;
+        for (int i = 0; i < SIZE; i++) {
+            root = insert(a[i], root, NULL);
+        }
+        end = clock();
+        creationTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
+        if(creationTime < bisectorMinCreationTime) bisectorMinCreationTime = creationTime;
+        if(creationTime > bisectorMaxCreationTime) bisectorMaxCreationTime = creationTime;
+        bisectorAvgCreationTime += creationTime;
+        if(insertionSteps < minInsertionSteps) minInsertionSteps = insertionSteps;
+        if(insertionSteps > maxInsertionSteps) maxInsertionSteps = insertionSteps;
+        avgInsertionSteps += insertionSteps;
+
+        // tree statistics        
+        nodeCount = 0;
+        leafCount = 0;
+        height = 0;
+        updateStatistics(root, 0);
+        if(nodeCount < minNodeCount) minNodeCount = nodeCount;
+        if(nodeCount > maxNodeCount) maxNodeCount = nodeCount;
+        avgNodeCount += nodeCount;
+        if(leafCount < minLeafCount) minLeafCount = leafCount;
+        if(leafCount > maxLeafCount) maxLeafCount = leafCount;
+        avgLeafCount += leafCount;
+        if(height < minHeight) minHeight = height;
+        if(height > maxHeight) maxHeight = height;
+        avgHeight += height;
+
+        // run experiments
+        // search in and outside the interval
+        for (int x = LOWER_BOUND-(UPPER_BOUND-LOWER_BOUND); x <= UPPER_BOUND+(UPPER_BOUND-LOWER_BOUND); x++) {
+            for (int y = LOWER_BOUND-(UPPER_BOUND-LOWER_BOUND); y <= UPPER_BOUND+(UPPER_BOUND-LOWER_BOUND); y++) {
+                Point *query = malloc(sizeof(Point));
+                query->x = x;
+                query->y = y;
+                Point *found = NULL;
+                querySteps = 0;
+
+                // naive search
+                start = clock();
+                found = naiveSearch(query, a, SIZE);
+                end = clock();
+                float queryTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
+                if (queryTime < naiveMinQueryTime) naiveMinQueryTime = queryTime;
+                if (queryTime > naiveMaxQueryTime) naiveMaxQueryTime = queryTime;
+                naiveAvgQueryTime += queryTime;
+                
+                // tree search
+                start = clock();
+                found = search(query, root);
+                end = clock();
+                queryTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
+                if (queryTime < bisectorMinQueryTime) bisectorMinQueryTime = queryTime;
+                if (queryTime > bisectorMaxQueryTime) bisectorMaxQueryTime = queryTime;
+                bisectorAvgQueryTime += queryTime;
+                if(querySteps < minQuerySteps) minQuerySteps = querySteps;
+                if(querySteps > maxQuerySteps) maxQuerySteps = querySteps;
+                avgQuerySteps += querySteps;
+            }
+        }
+
+        free(a);
+        free(root);
     }
+    // calc averages
+    naiveAvgCreationTime = naiveAvgCreationTime / TIMES;
+    bisectorAvgCreationTime = bisectorAvgCreationTime / TIMES;
+    avgInsertionSteps = avgInsertionSteps / TIMES;
+    avgNodeCount = avgNodeCount / TIMES;
+    avgLeafCount = avgLeafCount / TIMES;
+    avgHeight = avgHeight / TIMES;
+    int n = (UPPER_BOUND+(UPPER_BOUND-LOWER_BOUND))-(LOWER_BOUND-(UPPER_BOUND-LOWER_BOUND));
+    naiveAvgQueryTime = naiveAvgQueryTime / (n*n*TIMES);
+    bisectorAvgQueryTime = bisectorAvgQueryTime / (n*n*TIMES);
+    avgQuerySteps = avgQuerySteps / (n*n*TIMES);
     
-    // fill tree
-    start = clock();
-
-    for (int i = 0; i < SIZE; i++) {
-        root = insert(a[i], root, NULL);
-    }
-
-    free(a);
-    end = clock();
-    creationTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
-
-    // run experiments    
     printf("EXPERIMENTAL RESULTS:\n");
-    printf("Creation time: %f ms\n\n", creationTime);
-    // search inside interval
-    for (int x = LOWER_BOUND; x <= UPPER_BOUND; x++) {
-        for (int y = LOWER_BOUND; y <= UPPER_BOUND; y++) {
-            Point *query = malloc(sizeof(Point));
-            query->x = x;
-            query->y = y;
-            
-            start = clock();
-            
-            Point *found = NULL;
-            found = search(query, root);
-
-            end = clock();
-            float queryTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
-            if (queryTime < minQueryTime) minQueryTime = queryTime;
-            if (queryTime > maxQueryTime) maxQueryTime = queryTime;
-            avgQueryTime += queryTime;
-        }
-    }
-    avgQueryTime = avgQueryTime / ((UPPER_BOUND-LOWER_BOUND)*(UPPER_BOUND-LOWER_BOUND));
+    printf("---------------------\n");
+    printf("Naive search:\n");
+    printf("   Construction time: %f (%f, %f)\n", naiveAvgCreationTime, naiveMinCreationTime, naiveMaxCreationTime);
+    printf("   Construction steps: %d\n", SIZE);
+    printf("   Query time: %f (%f, %f)\n", naiveAvgQueryTime, naiveMinQueryTime, naiveMaxQueryTime);
+    printf("   Query steps: %d\n\n", SIZE);
+    printf("Bisector tree search:\n");
+    printf("   Construction time: %f (%f, %f)\n", bisectorAvgCreationTime, bisectorMinCreationTime, bisectorMaxCreationTime);
+    printf("   Construction steps: %d (%d, %d)\n", avgInsertionSteps, minInsertionSteps, maxInsertionSteps);
+    printf("   Query time: %f (%f, %f)\n", bisectorAvgQueryTime, bisectorMinQueryTime, bisectorMaxQueryTime);
+    printf("   Query steps: %d (%d, %d)\n\n", avgQuerySteps, minQuerySteps, maxQuerySteps);
+    printf("Bisector tree statistics:\n");
+    printf("   Node count: %d (%d, %d)\n", avgNodeCount, minNodeCount, maxNodeCount);
+    printf("   Leaf count: %d (%d, %d)\n", avgLeafCount, minLeafCount, maxLeafCount);
+    printf("   Height: %d (%d, %d)\n\n", avgHeight, minHeight, maxHeight);
     
-    printf("Inside the interval:\n");
-    printf("   Average query time: %f ms\n", avgQueryTime);
-    printf("   Minimum query time: %f ms\n", minQueryTime);
-    printf("   Maximum query time: %f ms\n\n", maxQueryTime);
-
-    // search outside interval
-    avgQueryTime = 0;
-    minQueryTime = DBL_MAX;
-    maxQueryTime = 0;
-    for (int x = LOWER_BOUND-UPPER_BOUND; x <= LOWER_BOUND; x++) {
-        for (int y = LOWER_BOUND-UPPER_BOUND; y <= LOWER_BOUND; y++) {
-            Point *query = malloc(sizeof(Point));
-            query->x = x;
-            query->y = y;
-            
-            start = clock();
-            
-            Point *found = NULL;
-            found = search(query, root);
-
-            end = clock();
-            float queryTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
-            if (queryTime < minQueryTime) minQueryTime = queryTime;
-            if (queryTime > maxQueryTime) maxQueryTime = queryTime;
-            avgQueryTime += queryTime;
-        }
-    }
-    for (int x = UPPER_BOUND; x <= UPPER_BOUND + UPPER_BOUND - LOWER_BOUND; x++) {
-        for (int y = UPPER_BOUND; y <= UPPER_BOUND + UPPER_BOUND - LOWER_BOUND; y++) {
-            Point *query = malloc(sizeof(Point));
-            query->x = x;
-            query->y = y;
-            
-            start = clock();
-            
-            Point *found = NULL;
-            found = search(query, root);
-
-            end = clock();
-            float queryTime = ((double) (end - start)) / (CLOCKS_PER_SEC/1000);
-            if (queryTime < minQueryTime) minQueryTime = queryTime;
-            if (queryTime > maxQueryTime) maxQueryTime = queryTime;
-            avgQueryTime += queryTime;
-        }
-    }
-    avgQueryTime = avgQueryTime / ((UPPER_BOUND-LOWER_BOUND)*(UPPER_BOUND-LOWER_BOUND)*2);
-    
-    printf("Outside the interval:\n");
-    printf("   Average query time: %f ms\n", avgQueryTime);
-    printf("   Minimum query time: %f ms\n", minQueryTime);
-    printf("   Maximum query time: %f ms\n\n", maxQueryTime);
-
-    printStatistics(root);
-
-    free(root);
     return (EXIT_SUCCESS);
 }
