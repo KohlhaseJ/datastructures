@@ -25,6 +25,6 @@ gcc -o BisectorTree BisectorTree.c
 ### Bisector Tree
 The bisector tree is a data structre towards the closest point problem proposed in [1]. The source code is available here `src/BisectorTree.c` and a documentation can be found here `src/BisectorTree.pdf`.
 
-# References
+## References
 
 >[1] Iraj Kalantari and Gerard McDonald. "A data structure and an algorithm for the nearest point problem." *IEEE Transactions on Software Engineering* p. 631–634, 1983.
