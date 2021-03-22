@@ -1,6 +1,5 @@
 .vscode
 *.exe
-*.py
 out
 dsenv
-homework.*
+doc
